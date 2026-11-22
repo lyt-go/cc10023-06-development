@@ -20,6 +20,8 @@ from app.services.drift_monitor import DriftMonitorService
 from app.services.data_export import DataExportService
 from app.services.pipeline_schedule import PipelineScheduleService
 from app.services.scenario_label import ScenarioLabelService
+from app.services.tenant_field_catalog import TenantFieldCatalogService
+from app.services.project_dataset import ProjectDatasetService
 
 SERVICES: dict[str, BaseModuleService] = {
     "feature_source": FeatureSourceService(),
@@ -40,6 +42,8 @@ SERVICES: dict[str, BaseModuleService] = {
     "data_export": DataExportService(),
     "pipeline_schedule": PipelineScheduleService(),
     "scenario_label": ScenarioLabelService(),
+    "tenant_field_catalog": TenantFieldCatalogService(),
+    "project_dataset": ProjectDatasetService(),
 }
 
 

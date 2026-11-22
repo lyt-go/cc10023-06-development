@@ -4,6 +4,11 @@ from __future__ import annotations
 from typing import Any
 
 from app.services.base import BaseModuleService
+from app.services.catalog_identity import (
+    build_column_label,
+    can_use_catalog_entry,
+    source_type_for,
+)
 from app.store import store
 
 
@@ -36,6 +41,57 @@ class FeatureGroupService(BaseModuleService):
             ],
         }
         return {"ok": True, "data": result}
+
+    def export_effective_features_for_project(self, group_id: int, project: str) -> dict[str, Any]:
+        """按项目导出特征组对应训练列：只含已准入且本项目有权限的列。
+
+        特征组按名字导出已生效定义本身不带项目/共享来源信息；这里以字段名关联
+        租户训练字段目录，输出的每一列都带计算口径、定义版本与来源类型，
+        私有列仅归属项目可采用，其他组织只能拿到明确共享给自己的字段。
+        """
+        group = store.find(self.MODULE, group_id)
+        if group is None:
+            return {"ok": False, "message": f"特征组 {group_id} 不存在"}
+        feature_names = {
+            f.strip() for f in (group.get("包含特征") or "").replace("，", ",").split(",") if f.strip()
+        }
+        define_rows = store.rows("feature_define")
+        effective_names = {
+            r.get("特征名称") for r in define_rows
+            if r.get("status") == "已生效" and r.get("特征名称") in feature_names
+        }
+        catalog_rows = store.rows("tenant_field_catalog")
+        columns: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for entry in catalog_rows:
+            if entry.get("字段名称") not in effective_names:
+                continue
+            if not can_use_catalog_entry(entry, project):
+                skipped.append({
+                    "字段名称": entry.get("字段名称"),
+                    "归属项目": entry.get("归属项目"),
+                    "当前状态": entry.get("status"),
+                    "共享范围": entry.get("共享范围", ""),
+                    "原因": "未准入" if entry.get("status") != "已准入" else "未共享给本项目",
+                })
+                continue
+            columns.append({
+                "字段名称": entry.get("字段名称"),
+                "归属项目": entry.get("归属项目"),
+                "计算口径": entry.get("计算口径"),
+                "定义版本": entry.get("定义版本"),
+                "来源类型": source_type_for(entry, project),
+                "列标识": build_column_label(entry),
+            })
+        return {
+            "ok": True,
+            "group_id": group_id,
+            "group_name": group.get("组名称"),
+            "project": project,
+            "可用列数": len(columns),
+            "columns": columns,
+            "剔除列": skipped,
+        }
 
     def create_training_pipeline(self, group_id: int) -> dict[str, Any]:
         """基于特征组创建训练流水线配置，关联特征集并初始化算法参数。"""

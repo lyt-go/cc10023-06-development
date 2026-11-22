@@ -168,7 +168,12 @@ async function submitCreate() {
 async function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
   try {
-    const result = await applyAction(meta.key, Number(row.id), action)
+    let remark: string | undefined
+    if (action === '授权共享' || action === '撤销共享') {
+      remark = window.prompt(`请输入要${action}的目标项目名称`) ?? undefined
+      if (!remark) return
+    }
+    const result = await applyAction(meta.key, Number(row.id), action, remark)
     if (!result.ok) throw new Error(result.message)
     await reload()
   } catch (error) {
